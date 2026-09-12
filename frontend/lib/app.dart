@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import 'core/theme/orca_theme.dart';
 import 'core/theme/verdict_colors.dart';
 import 'core/cache/cache_service.dart';
+import 'core/widgets/orca_app_bar.dart';
 import 'features/advisory/presentation/screens/home_screen.dart';
 import 'features/agents/presentation/screens/ai_screen.dart';
 import 'features/alerts/presentation/providers/alerts_provider.dart';
@@ -17,7 +18,9 @@ import 'features/settings/presentation/screens/info_screen.dart';
 import 'l10n/app_localizations.dart';
 
 final routerProvider = Provider<GoRouter>((ref) {
-  final onboarding = ref.watch(cacheServiceProvider).get('app.onboarding')?.data['complete'] == true;
+  final demoMode = ref.watch(demoModeProvider);
+  final onboarding = demoMode ||
+      ref.watch(cacheServiceProvider).get('app.onboarding')?.data['complete'] == true;
   return GoRouter(
     initialLocation: onboarding ? '/home' : '/onboarding',
     routes: [

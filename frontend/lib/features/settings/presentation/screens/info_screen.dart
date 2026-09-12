@@ -267,7 +267,7 @@ class InfoScreen extends ConsumerWidget {
                   ),
                   SizedBox(height: 6),
                   Text(
-                    'Marine EcOsystem Reasoning with Collaborative Agents.\nDesigned for low-literacy fishers, high sunlight readability, and honest data provenance.',
+                    'Marine EcOsystem Reasoning with Collaborative Agents.\nDesigned for low-literacy fishers, high sunlight readability, and honest data provenance.\n\nORCA is a complementary presentation layer inspired by the safety-communication practices of Indian maritime advisory services; it is not an agency integration or endorsement.',
                     style: TextStyle(fontSize: 12, color: OrcaTheme.textPrimary, height: 1.35),
                   ),
                   SizedBox(height: 8),

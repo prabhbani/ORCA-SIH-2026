@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../../core/cache/cache_service.dart';
 import '../../../../core/network/dio_provider.dart';
 import '../../../../core/widgets/orca_app_bar.dart';
 import '../../data/datasources/navigate_remote.dart';
@@ -19,7 +20,11 @@ final navigateRemoteDataSourceProvider = Provider<NavigateRemoteDataSource>((ref
 /// Provider for NavigateRepository.
 final navigateRepositoryProvider = Provider<NavigateRepository>((ref) {
   final remote = ref.watch(navigateRemoteDataSourceProvider);
-  return NavigateRepositoryImpl(remoteDataSource: remote);
+  final cache = ref.watch(cacheServiceProvider);
+  return NavigateRepositoryImpl(
+    remoteDataSource: remote,
+    cacheService: cache,
+  );
 });
 
 /// Provider for GetRouteAdvisoryUseCase.
@@ -77,6 +82,8 @@ class NavigateNotifier extends StateNotifier<AsyncValue<RouteAnalysisState>> {
         final advRaw = await rootBundle.loadString('assets/fixtures/route_advisory.json');
         final advJson = jsonDecode(advRaw) as Map<String, dynamic>;
         final advDto = RouteAdvisoryDto.fromJson(advJson);
+        await _ref.read(cacheServiceProvider).put('last_known_route_check', checkJson);
+        await _ref.read(cacheServiceProvider).put('last_known_route_advisory', advJson);
 
         state = AsyncValue.data(
           RouteAnalysisState(

@@ -1,6 +1,7 @@
 import '../../../../core/result/result.dart';
 
 import '../entities/zone_snapshot.dart';
+import '../entities/map_layer.dart';
 
 /// Contract for map and GIS probe access (§10).
 abstract class MapRepository {

@@ -9,6 +9,7 @@ import '../../data/datasources/map_remote.dart';
 import '../../data/dto/zone_dto.dart';
 import '../../data/repositories/map_repo_impl.dart';
 import '../../domain/entities/zone_snapshot.dart';
+import '../../domain/entities/map_layer.dart';
 import '../../domain/repositories/map_repo.dart';
 import '../../domain/usecases/get_zone_snapshot.dart';
 
@@ -67,6 +68,20 @@ final mapLayersProvider = StateProvider<List<MapLayerEntity>>((ref) {
 /// Probed zone snapshot state provider.
 final probedZoneProvider = StateProvider<AsyncValue<ZoneSnapshot?>?>((ref) => null);
 
+/// Restores the last supported zone snapshot when live data is unavailable.
+Future<void> restoreLastKnownZone(WidgetRef ref) async {
+  final cached = ref.read(cacheServiceProvider).get('last_known_zone');
+  if (cached == null || ref.read(probedZoneProvider) != null) return;
+
+  try {
+    final dto = ZoneDto.fromJson(cached.data);
+    ref.read(probedZoneProvider.notifier).state =
+        AsyncValue.data(dto.toEntity(cached.staleness));
+  } catch (_) {
+    // Invalid cached data is treated as unavailable rather than shown as live.
+  }
+}
+
 /// Helper function to probe coordinate.
 Future<void> probeCoordinate(WidgetRef ref, double lat, double lon) async {
   ref.read(probedZoneProvider.notifier).state = const AsyncValue.loading();
@@ -78,7 +93,9 @@ Future<void> probeCoordinate(WidgetRef ref, double lat, double lon) async {
       final json = jsonDecode(raw) as Map<String, dynamic>;
       final dto = ZoneDto.fromJson(json);
       final staleness = StalenessInfo.fromDateTime(DateTime.now());
-      ref.read(probedZoneProvider.notifier).state = AsyncValue.data(dto.toEntity(staleness));
+      final snapshot = dto.toEntity(staleness);
+      await ref.read(cacheServiceProvider).put('last_known_zone', json);
+      ref.read(probedZoneProvider.notifier).state = AsyncValue.data(snapshot);
       return;
     } catch (e, st) {
       ref.read(probedZoneProvider.notifier).state = AsyncValue.error(e, st);
@@ -91,6 +108,27 @@ Future<void> probeCoordinate(WidgetRef ref, double lat, double lon) async {
 
   result.when(
     ok: (snapshot) {
+      ref.read(cacheServiceProvider).put('last_known_zone', <String, dynamic>{
+        'lat': snapshot.lat,
+        'lon': snapshot.lon,
+        'zone_name': snapshot.zoneName,
+        'offshore_dist_km': snapshot.offshoreDistKm,
+        'depth_m': snapshot.depthM,
+        'wave_height_m': snapshot.waveHeightM,
+        'swell_period_s': snapshot.swellPeriodS,
+        'wind_speed_kn': snapshot.windSpeedKn,
+        'wind_direction': snapshot.windDirection,
+        'sea_temp_c': snapshot.seaTempC,
+        'current_speed_kn': snapshot.currentSpeedKn,
+        'current_direction': snapshot.currentDirection,
+        'chlorophyll_mg_m3': snapshot.chlorophyllMgM3,
+        'fishing_effort_hours': snapshot.fishingEffortHours,
+        'nearest_harbour': snapshot.nearestHarbour,
+        'nearest_harbour_dist_km': snapshot.nearestHarbourDistKm,
+        'sources': snapshot.sources,
+        'sources_failed': snapshot.sourcesFailed,
+        'timestamp': snapshot.timestamp.toIso8601String(),
+      });
       ref.read(probedZoneProvider.notifier).state = AsyncValue.data(snapshot);
     },
     err: (failure) {

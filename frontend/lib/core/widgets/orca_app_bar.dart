@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../live/live_channel.dart';
+import '../config/feature_flags.dart';
 import '../theme/orca_theme.dart';
 import '../theme/verdict_colors.dart';
 import 'demo_badge.dart';
@@ -8,7 +9,8 @@ import '../cache/cache_service.dart';
 
 /// StateProvider controlling Demo Mode across the app.
 final demoModeProvider = StateProvider<bool>((ref) {
-  return ref.watch(cacheServiceProvider).get('settings.demo_mode')?.data['value'] == true;
+  return FeatureFlags.demoModeAvailable &&
+      ref.watch(cacheServiceProvider).get('settings.demo_mode')?.data['value'] == true;
 });
 
 /// Custom Top App Bar with live SSE indicator and demo badge.
