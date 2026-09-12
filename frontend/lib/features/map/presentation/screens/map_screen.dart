@@ -15,6 +15,8 @@ import '../../../advisory/presentation/providers/advisory_provider.dart';
 import '../../../navigate/domain/entities/route_check.dart';
 import '../../../navigate/presentation/providers/navigate_provider.dart';
 import '../providers/map_provider.dart';
+import '../../domain/entities/demo_marine_data.dart';
+import '../providers/demo_marine_provider.dart';
 import '../utils/route_geometry.dart';
 import '../widgets/layer_selector_dialog.dart';
 import '../widgets/probe_bottom_sheet.dart';
@@ -33,6 +35,9 @@ class _MapScreenState extends ConsumerState<MapScreen>
     with SingleTickerProviderStateMixin {
   final MapController _mapController = MapController();
   late final AnimationController _locationPulseController;
+  bool _demoPlaying = false;
+  bool _demoFollow = true;
+  double _demoProgress = 0;
   LatLng _currentLocation = const LatLng(AppConfig.defaultLat, AppConfig.defaultLon);
   LatLng? _probedLocation;
   _LocationStatus _locationStatus = _LocationStatus.unavailable;
@@ -45,8 +50,35 @@ class _MapScreenState extends ConsumerState<MapScreen>
       vsync: this,
       duration: const Duration(milliseconds: 2200),
     )..repeat();
+    _locationPulseController.addListener(_onDemoTick);
     restoreLastKnownZone(ref);
     _restoreLastKnownLocation();
+  }
+
+  LatLng _demoLocation(DemoMarineData data) {
+    final points = data.route.geometry;
+    if (points.length < 2 || _demoProgress == 0) return data.userLocation.point;
+    final scaled = _demoProgress * (points.length - 1);
+    final index = scaled.floor().clamp(0, points.length - 2);
+    final fraction = scaled - index;
+    final start = points[index];
+    final end = points[index + 1];
+    return LatLng(
+      start.latitude + ((end.latitude - start.latitude) * fraction),
+      start.longitude + ((end.longitude - start.longitude) * fraction),
+    );
+  }
+
+  void _toggleDemoSimulation(DemoMarineData data) {
+    setState(() => _demoPlaying = !_demoPlaying);
+    if (_demoPlaying && _demoFollow) _mapController.move(_demoLocation(data), 10.5);
+  }
+
+  void _onDemoTick() {
+    if (!mounted || !_demoPlaying) return;
+    setState(() {
+      _demoProgress = _locationPulseController.value;
+    });
   }
 
   @override
@@ -64,6 +96,9 @@ class _MapScreenState extends ConsumerState<MapScreen>
     final advisory = ref.watch(advisoryProvider).valueOrNull;
     final routeState = ref.watch(navigateProvider).valueOrNull;
     final routePoints = RouteGeometry.validPoints(routeState?.check?.legs);
+    final isDemo = ref.watch(demoModeProvider);
+    final demoState = isDemo ? ref.watch(demoMarineDataProvider) : null;
+    final demoData = demoState?.valueOrNull;
     final routeColor = routeState?.advisory == null
       ? OrcaTheme.accent
       : VerdictColors.fromVerdict(routeState!.advisory!.level);
@@ -116,6 +151,8 @@ class _MapScreenState extends ConsumerState<MapScreen>
                 urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
                 userAgentPackageName: 'com.orca.orca_app',
               ),
+
+              if (demoData != null) ..._buildDemoMapLayers(demoData),
               ...layers.where((layer) => layer.isEnabled && layer.tileUrl.contains('{z}')).map(
                 (layer) => TileLayer(
                   urlTemplate: layer.tileUrl.startsWith('http')
@@ -163,9 +200,10 @@ class _MapScreenState extends ConsumerState<MapScreen>
                 markers: [
                   // Vessel Position Marker
                   if (_locationStatus == _LocationStatus.ready ||
-                      _locationStatus == _LocationStatus.cached)
+                      _locationStatus == _LocationStatus.cached ||
+                      demoData != null)
                     Marker(
-                      point: _currentLocation,
+                      point: demoData == null ? _currentLocation : _demoLocation(demoData),
                       width: 64,
                       height: 64,
                       child: Semantics(
@@ -239,6 +277,7 @@ class _MapScreenState extends ConsumerState<MapScreen>
                     routeState?.check,
                     routeState?.advisory,
                   ),
+                  if (demoData != null) ..._buildDemoMarkers(demoData),
                 ],
               ),
             ],
@@ -284,6 +323,31 @@ class _MapScreenState extends ConsumerState<MapScreen>
               ),
             ),
           ),
+
+          if (demoData != null) ...[
+            Positioned(
+              top: 98,
+              left: 14,
+              right: 62,
+              child: _DemoWeatherPanel(data: demoData),
+            ),
+            Positioned(
+              top: 186,
+              left: 14,
+              right: 14,
+              child: _DemoMarineTicker(updates: demoData.updates),
+            ),
+            Positioned(
+              bottom: probedSnapshotState != null ? 242 : 16,
+              right: 14,
+              child: _DemoControlPanel(
+                playing: _demoPlaying,
+                following: _demoFollow,
+                onSimulation: () => _toggleDemoSimulation(demoData),
+                onFollow: () => setState(() => _demoFollow = !_demoFollow),
+              ),
+            ),
+          ],
 
           // Connection and authoritative advisory status.
           Positioned(
@@ -489,6 +553,87 @@ class _MapScreenState extends ConsumerState<MapScreen>
       _mapController.move(location, 11.0);
     } catch (_) {
       _setLocationStatus(_LocationStatus.unavailable);
+    }
+  }
+
+  List<Widget> _buildDemoMapLayers(DemoMarineData data) {
+    final pulse = 0.12 + (_locationPulseController.value * 0.08);
+    final zonePolygons = data.zones.map((zone) {
+      final color = _demoStatusColor(zone.status);
+      return Polygon(
+        points: zone.polygon,
+        color: color.withValues(alpha: pulse),
+        borderColor: color.withValues(alpha: 0.82),
+        borderStrokeWidth: zone.status == 'NO-GO' ? 2.6 : 1.8,
+      );
+    }).toList();
+    final trailLines = data.vessels
+        .where((vessel) => vessel.trail.length > 1)
+        .map((vessel) => Polyline(
+              points: vessel.trail,
+              color: OrcaTheme.accent.withValues(alpha: 0.24),
+              strokeWidth: 2,
+              pattern: StrokePattern.dashed(segments: [2, 4]),
+            ))
+        .toList();
+    return [
+      PolygonLayer(polygons: zonePolygons),
+      PolylineLayer(
+        polylines: [
+          Polyline(points: data.route.geometry, color: OrcaTheme.accent.withValues(alpha: 0.3), strokeWidth: 10),
+          Polyline(points: data.route.geometry, color: Colors.white, strokeWidth: 3, pattern: StrokePattern.dashed(segments: [8, 6])),
+          Polyline(points: data.cycloneTrack, color: VerdictColors.critical.withValues(alpha: 0.8), strokeWidth: 3, pattern: StrokePattern.dashed(segments: [8, 6])),
+          Polyline(points: data.depth20, color: Colors.white.withValues(alpha: 0.18), strokeWidth: 1.2),
+          Polyline(points: data.depth50, color: Colors.white.withValues(alpha: 0.24), strokeWidth: 1.2),
+          Polyline(points: data.depth100, color: Colors.white.withValues(alpha: 0.3), strokeWidth: 1.2),
+          ...trailLines,
+        ],
+      ),
+    ];
+  }
+
+  List<Marker> _buildDemoMarkers(DemoMarineData data) {
+    final markers = <Marker>[];
+    for (final port in data.ports) {
+      markers.add(Marker(point: port.point, width: 106, height: 46, child: _DemoLabelMarker(icon: Icons.anchor, label: 'DEMO PORT', color: VerdictColors.info)));
+    }
+    for (final zone in data.zones) {
+      markers.add(Marker(point: zone.point, width: 136, height: 48, child: _DemoLabelMarker(icon: VerdictColors.iconForVerdict(zone.status), label: zone.status == 'GO' ? 'SAFE ZONE' : zone.status, color: _demoStatusColor(zone.status))));
+    }
+    for (final vessel in data.vessels) {
+      markers.add(Marker(
+        point: vessel.point,
+        width: 116,
+        height: 58,
+        child: Semantics(
+          label: '${vessel.name}, demo vessel, ${vessel.status.toLowerCase()}',
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (vessel.status == 'MOVING') Icon(Icons.waves, color: Colors.white.withValues(alpha: 0.55), size: 18),
+              Transform.rotate(angle: vessel.heading * 3.1415926535 / 180, child: Icon(Icons.sailing, color: OrcaTheme.accent, size: 28)),
+              Text(vessel.name.replaceFirst('Demo Vessel ', ''), style: const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.bold, shadows: [Shadow(color: Colors.black, blurRadius: 3)])),
+            ],
+          ),
+        ),
+      ));
+    }
+    for (final probe in data.probes) {
+      markers.add(Marker(point: probe.point, width: 62, height: 62, child: Semantics(label: '${probe.name}, ${probe.status.toLowerCase()}', child: AnimatedBuilder(animation: _locationPulseController, builder: (context, child) => Transform.scale(scale: 0.86 + (_locationPulseController.value * 0.14), child: child), child: _DemoProbeMarker(status: probe.status)))));
+    }
+    for (final observation in data.observations) {
+      final icon = observation.type == 'WHALE' ? Icons.water : observation.type == 'DOLPHIN' ? Icons.pets : Icons.bubble_chart;
+      markers.add(Marker(point: observation.point, width: 42, height: 42, child: Semantics(label: observation.name, child: Icon(icon, color: Colors.white, size: 25))));
+    }
+    markers.add(Marker(point: data.cycloneCenter, width: 100, height: 86, child: AnimatedBuilder(animation: _locationPulseController, builder: (context, child) => Transform.rotate(angle: _locationPulseController.value * 6.283185307, child: child), child: const _DemoCycloneMarker())));
+    return markers;
+  }
+
+  Color _demoStatusColor(String status) {
+    switch (status) {
+      case 'GO': return VerdictColors.go;
+      case 'NO-GO': return VerdictColors.noGo;
+      default: return VerdictColors.caution;
     }
   }
 
@@ -891,6 +1036,165 @@ class _MapLegend extends StatelessWidget {
           ],
         ],
       ),
+    );
+  }
+}
+
+class _DemoLabelMarker extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final Color color;
+
+  const _DemoLabelMarker({required this.icon, required this.label, required this.color});
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      label: label,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, color: color, size: 23),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+            color: OrcaTheme.surface.withValues(alpha: 0.9),
+            child: Text(label, style: TextStyle(color: color, fontSize: 9, fontWeight: FontWeight.w900)),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _DemoProbeMarker extends StatelessWidget {
+  final String status;
+
+  const _DemoProbeMarker({required this.status});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          width: 28,
+          height: 28,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: VerdictColors.info.withValues(alpha: 0.28),
+            border: Border.all(color: VerdictColors.info, width: 2),
+            boxShadow: [BoxShadow(color: VerdictColors.info.withValues(alpha: 0.5), blurRadius: 8)],
+          ),
+          child: const Icon(Icons.sensors, color: Colors.white, size: 16),
+        ),
+        Text(status, style: const TextStyle(color: Colors.white, fontSize: 8, fontWeight: FontWeight.bold, shadows: [Shadow(color: Colors.black, blurRadius: 3)])),
+      ],
+    );
+  }
+}
+
+class _DemoCycloneMarker extends StatelessWidget {
+  const _DemoCycloneMarker();
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          width: 54,
+          height: 54,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: VerdictColors.critical.withValues(alpha: 0.18),
+            border: Border.all(color: VerdictColors.critical, width: 2),
+            boxShadow: [BoxShadow(color: VerdictColors.critical.withValues(alpha: 0.4), blurRadius: 12)],
+          ),
+          child: const Icon(Icons.storm, color: VerdictColors.critical, size: 30),
+        ),
+        const Text('DEMO CYCLONE', style: TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.w900, shadows: [Shadow(color: Colors.black, blurRadius: 3)])),
+      ],
+    );
+  }
+}
+
+class _DemoWeatherPanel extends StatelessWidget {
+  final DemoMarineData data;
+
+  const _DemoWeatherPanel({required this.data});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      decoration: BoxDecoration(
+        color: OrcaTheme.surface.withValues(alpha: 0.94),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: OrcaTheme.accent.withValues(alpha: 0.55)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Row(children: [Icon(Icons.wb_cloudy, color: OrcaTheme.accent, size: 16), SizedBox(width: 6), Text('DEMO WEATHER', style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.w900))]),
+          const SizedBox(height: 4),
+          Text('${data.weatherCondition}  ·  ${data.temperatureC}°C  ·  ${data.visibilityKm} km vis.', style: const TextStyle(color: OrcaTheme.textSecondary, fontSize: 10)),
+          Text('Wind ${data.windKmh} km/h ${data.windDirection}  ·  Waves ${data.waveHeightM.toStringAsFixed(1)} m ${data.waveDirection}', style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.w600)),
+          Text('Current ${data.currentKnots.toStringAsFixed(1)} kn ${data.currentDirection}  ·  Sea ${data.seaState}', style: const TextStyle(color: OrcaTheme.textSecondary, fontSize: 10)),
+        ],
+      ),
+    );
+  }
+}
+
+class _DemoMarineTicker extends StatelessWidget {
+  final List<String> updates;
+
+  const _DemoMarineTicker({required this.updates});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+      decoration: BoxDecoration(color: const Color(0xE6101F42), borderRadius: BorderRadius.circular(8), border: Border.all(color: VerdictColors.critical.withValues(alpha: 0.7))),
+      child: Row(
+        children: [
+          const Icon(Icons.radio, color: VerdictColors.critical, size: 15),
+          const SizedBox(width: 6),
+          const Text('DEMO UPDATE', style: TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.w900)),
+          const SizedBox(width: 8),
+          Expanded(child: Text(updates.isEmpty ? 'Simulation data loaded' : updates.first, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: OrcaTheme.textSecondary, fontSize: 10))),
+        ],
+      ),
+    );
+  }
+}
+
+class _DemoControlPanel extends StatelessWidget {
+  final bool playing;
+  final bool following;
+  final VoidCallback onSimulation;
+  final VoidCallback onFollow;
+
+  const _DemoControlPanel({required this.playing, required this.following, required this.onSimulation, required this.onFollow});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.end,
+      children: [
+        Material(
+          color: OrcaTheme.surface.withValues(alpha: 0.96),
+          borderRadius: BorderRadius.circular(10),
+          child: Column(
+            children: [
+              IconButton(onPressed: onSimulation, tooltip: playing ? 'Pause simulated vessel' : 'Simulate location', icon: Icon(playing ? Icons.pause : Icons.play_arrow, color: OrcaTheme.accent)),
+              IconButton(onPressed: onFollow, tooltip: 'Follow simulated vessel', icon: Icon(following ? Icons.gps_fixed : Icons.gps_not_fixed, color: following ? VerdictColors.go : OrcaTheme.textSecondary)),
+            ],
+          ),
+        ),
+        const SizedBox(height: 4),
+        const Text('DEMO CONTROLS', style: TextStyle(color: Colors.white, fontSize: 8, fontWeight: FontWeight.w900, shadows: [Shadow(color: Colors.black, blurRadius: 3)])),
+      ],
     );
   }
 }

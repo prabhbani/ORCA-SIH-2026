@@ -1,0 +1,41 @@
+{
+  "environment": "DEMO",
+  "demo": true,
+  "scenario": "normal_fishing_day",
+  "updated_at": "2026-09-13T10:42:00Z",
+  "user_location": {"id":"demo-user","demo":true,"latitude":9.9312,"longitude":76.2673,"heading":118,"speed_knots":6.8,"accuracy_meters":12,"status":"LIVE_SIMULATION"},
+  "ports": [{"id":"port-001","name":"Demo Fishing Port","latitude":9.9667,"longitude":76.2417,"demo":true}],
+  "fishing_zones": [
+    {"id":"zone-safe-001","name":"Recommended Fishing Zone","status":"GO","confidence":"HIGH","demo":true,"polygon":[[9.9500,76.3000],[9.9750,76.3250],[9.9600,76.3550],[9.9250,76.3400],[9.9500,76.3000]]},
+    {"id":"zone-caution-001","name":"Caution Area","status":"CAUTION","confidence":"MEDIUM","demo":true,"polygon":[[9.8850,76.3800],[9.9100,76.4100],[9.8800,76.4400],[9.8500,76.4050],[9.8850,76.3800]]},
+    {"id":"zone-danger-001","name":"Restricted Marine Area","status":"NO-GO","confidence":"HIGH","demo":true,"polygon":[[9.8000,76.5000],[9.8300,76.5300],[9.8000,76.5700],[9.7650,76.5350],[9.8000,76.5000]]}
+  ],
+  "routes": [{"id":"route-demo-001","name":"Demo Fishing Route","demo":true,"status":"ACTIVE","distance_km":12.4,"eta_minutes":28,"geometry":[[9.9667,76.2417],[9.9600,76.2550],[9.9550,76.2700],[9.9520,76.2850],[9.9500,76.3000]]}],
+  "vessels": [
+    {"id":"demo-vessel-alpha","name":"Demo Vessel Alpha","demo":true,"latitude":9.9450,"longitude":76.2850,"heading":118,"speed_knots":7.2,"status":"MOVING","trail":[[9.9300,76.2500],[9.9350,76.2600],[9.9400,76.2720],[9.9450,76.2850]]},
+    {"id":"demo-vessel-bravo","name":"Demo Vessel Bravo","demo":true,"latitude":9.9650,"longitude":76.3200,"heading":72,"speed_knots":5.4,"status":"MOVING","trail":[[9.9500,76.2950],[9.9550,76.3050],[9.9600,76.3120],[9.9650,76.3200]]},
+    {"id":"demo-vessel-charlie","name":"Demo Vessel Charlie","demo":true,"latitude":9.9050,"longitude":76.3950,"heading":210,"speed_knots":3.2,"status":"STATIONARY","trail":[]}
+  ],
+  "probes": [
+    {"id":"probe-001","name":"Marine Probe Alpha","demo":true,"latitude":9.9480,"longitude":76.2950,"status":"TRANSMITTING","signal_strength":92},
+    {"id":"probe-002","name":"Marine Probe Bravo","demo":true,"latitude":9.9620,"longitude":76.3150,"status":"TRANSMITTING","signal_strength":86},
+    {"id":"probe-003","name":"Marine Probe Charlie","demo":true,"latitude":9.9200,"longitude":76.3500,"status":"CONNECTED","signal_strength":78},
+    {"id":"probe-004","name":"Marine Probe Delta","demo":true,"latitude":9.8900,"longitude":76.3900,"status":"CONNECTED","signal_strength":71}
+  ],
+  "marine_observations": [
+    {"id":"obs-001","type":"WHALE","name":"Demo Whale Observation","demo":true,"latitude":9.9550,"longitude":76.3350,"observed_minutes_ago":8},
+    {"id":"obs-002","type":"DOLPHIN","name":"Demo Dolphin Observation","demo":true,"latitude":9.9350,"longitude":76.3600,"observed_minutes_ago":14},
+    {"id":"obs-003","type":"FISH_ACTIVITY","name":"Demo Marine Activity","demo":true,"latitude":9.9450,"longitude":76.3250,"observed_minutes_ago":5}
+  ],
+  "weather":{"demo":true,"condition":"Partly Cloudy","temperature_c":29,"visibility_km":8,"precipitation_probability":20},
+  "wind":{"demo":true,"speed_kmh":18,"direction":"NE","direction_degrees":45},
+  "waves":{"demo":true,"height_m":1.2,"direction":"ENE","period_seconds":7,"sea_state":"MODERATE"},
+  "ocean_current":{"demo":true,"speed_knots":1.4,"direction":"E","direction_degrees":90,"intensity":"MEDIUM"},
+  "cyclone":{"demo":true,"active":true,"name":"DEMO CYCLONE","category":"DEMO","latitude":10.1500,"longitude":76.6500,"movement_direction":"NE","movement_speed_kmh":12,"warning_level":"DEMO WARNING","forecast_track":[[10.1500,76.6500],[10.1800,76.6900],[10.2200,76.7300],[10.2700,76.7800]],"warning_radius_km":45},
+  "alerts":[{"id":"alert-001","type":"WEATHER","severity":"MEDIUM","demo":true,"title":"Demo Weather Advisory","message":"Wind conditions are increasing in the eastern marine area.","latitude":9.9000,"longitude":76.4200},{"id":"alert-002","type":"CYCLONE","severity":"HIGH","demo":true,"title":"Demo Cyclone Warning","message":"Simulated cyclone track detected.","latitude":10.1500,"longitude":76.6500}],
+  "depth_contours":[{"depth_m":20,"demo":true,"geometry":[[9.9600,76.3000],[9.9700,76.3300],[9.9650,76.3600]]},{"depth_m":50,"demo":true,"geometry":[[9.9300,76.3200],[9.9400,76.3500],[9.9300,76.3900]]},{"depth_m":100,"demo":true,"geometry":[[9.9000,76.3500],[9.9100,76.3900],[9.9000,76.4300]]}],
+  "safety":{"demo":true,"status":"GO","title":"SAFE","message":"Demo conditions indicate a recommended fishing area.","confidence":"HIGH"},
+  "marine_updates":[{"id":"update-001","demo":true,"time":"10:42","type":"PROBE","message":"Marine probe observation received."},{"id":"update-002","demo":true,"time":"10:35","type":"WEATHER","message":"Wind conditions updated."},{"id":"update-003","demo":true,"time":"10:21","type":"FISHING_ZONE","message":"Recommended fishing zone refreshed."},{"id":"update-004","demo":true,"time":"10:10","type":"VESSEL","message":"Demo vessel Alpha started navigation."}],
+  "timeline":[{"time":"10:42","demo":true,"type":"MARINE_OBSERVATION","message":"Probe observation received."},{"time":"10:35","demo":true,"type":"WEATHER","message":"Wind conditions updated."},{"time":"10:21","demo":true,"type":"FISHING_ZONE","message":"Fishing zone updated."},{"time":"10:10","demo":true,"type":"VESSEL","message":"Demo vessel Alpha started moving."}],
+  "data_status":{"environment":"DEMO","demo":true,"freshness":"SIMULATED","source":"DEMO SIMULATION"}
+}

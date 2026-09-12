@@ -36,4 +36,5 @@ flutter:
   generate: true
   assets:
     - assets/fixtures/
+    - assets/demo/
     - assets/images/
