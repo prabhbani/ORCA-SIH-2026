@@ -9,7 +9,7 @@ import 'features/advisory/presentation/screens/home_screen.dart';
 import 'features/agents/presentation/screens/ai_screen.dart';
 import 'features/alerts/presentation/providers/alerts_provider.dart';
 import 'features/alerts/presentation/screens/alerts_screen.dart';
-import 'features/map/presentation/screens/map_screen.dart';
+import 'features/map/presentation/screens/marine_safety_map_screen.dart';
 import 'features/navigate/presentation/screens/navigate_screen.dart';
 import 'features/onboarding/presentation/screens/onboarding_screen.dart';
 import 'features/settings/presentation/providers/settings_provider.dart';
@@ -37,7 +37,7 @@ final routerProvider = Provider<GoRouter>((ref) {
           ),
           GoRoute(
             path: '/map',
-            builder: (context, state) => const MapScreen(),
+            builder: (context, state) => const MarineSafetyMapScreen(),
           ),
           GoRoute(
             path: '/ai',
