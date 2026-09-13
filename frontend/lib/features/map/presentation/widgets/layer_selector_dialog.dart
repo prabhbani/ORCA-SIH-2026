@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/theme/orca_theme.dart';
-import '../../domain/entities/map_layer.dart';
+import '../../domain/entities/zone_snapshot.dart';
 import '../providers/map_provider.dart';
 
 /// Modal dialog allowing skippers/judges to toggle map raster & vector layers (§8).

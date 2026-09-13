@@ -5,7 +5,6 @@ import 'package:go_router/go_router.dart';
 import 'core/theme/orca_theme.dart';
 import 'core/theme/verdict_colors.dart';
 import 'core/cache/cache_service.dart';
-import 'core/widgets/orca_app_bar.dart';
 import 'features/advisory/presentation/screens/home_screen.dart';
 import 'features/agents/presentation/screens/ai_screen.dart';
 import 'features/alerts/presentation/providers/alerts_provider.dart';
@@ -15,12 +14,15 @@ import 'features/navigate/presentation/screens/navigate_screen.dart';
 import 'features/onboarding/presentation/screens/onboarding_screen.dart';
 import 'features/settings/presentation/providers/settings_provider.dart';
 import 'features/settings/presentation/screens/info_screen.dart';
+import 'features/auth/presentation/screens/profile_screen.dart';
+import 'features/locations/presentation/screens/saved_locations_screen.dart';
+import 'features/history/presentation/screens/history_screen.dart';
+import 'features/catch_reports/presentation/screens/catch_report_screen.dart';
+import 'features/official/presentation/screens/official_dashboard_screen.dart';
 import 'l10n/app_localizations.dart';
 
 final routerProvider = Provider<GoRouter>((ref) {
-  final demoMode = ref.watch(demoModeProvider);
-  final onboarding = demoMode ||
-      ref.watch(cacheServiceProvider).get('app.onboarding')?.data['complete'] == true;
+  final onboarding = ref.watch(cacheServiceProvider).get('app.onboarding')?.data['complete'] == true;
   return GoRouter(
     initialLocation: onboarding ? '/home' : '/onboarding',
     routes: [
@@ -52,6 +54,26 @@ final routerProvider = Provider<GoRouter>((ref) {
           GoRoute(
             path: '/info',
             builder: (context, state) => const InfoScreen(),
+          ),
+          GoRoute(
+            path: '/profile',
+            builder: (context, state) => const ProfileScreen(),
+          ),
+          GoRoute(
+            path: '/locations',
+            builder: (context, state) => const SavedLocationsScreen(),
+          ),
+          GoRoute(
+            path: '/history',
+            builder: (context, state) => const HistoryScreen(),
+          ),
+          GoRoute(
+            path: '/catch-report',
+            builder: (context, state) => const CatchReportScreen(),
+          ),
+          GoRoute(
+            path: '/official-dashboard',
+            builder: (context, state) => const OfficialDashboardScreen(),
           ),
         ],
       ),

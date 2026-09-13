@@ -22,7 +22,7 @@ class ZoneDto {
   final double? nearestHarbourDistKm;
   final List<String> sources;
   final List<String> sourcesFailed;
-  final String? timestampStr;
+  final DateTime? timestamp;
 
   ZoneDto({
     required this.lat,
@@ -43,8 +43,31 @@ class ZoneDto {
     this.nearestHarbourDistKm,
     required this.sources,
     required this.sourcesFailed,
-    this.timestampStr,
+    this.timestamp,
   });
+
+  static DateTime? _parseTimestamp(dynamic value) {
+    if (value is int) {
+      return DateTime.fromMillisecondsSinceEpoch(value * 1000, isUtc: true);
+    }
+    if (value is num) {
+      return DateTime.fromMillisecondsSinceEpoch(value.toInt() * 1000, isUtc: true);
+    }
+    return DateFormatter.parseIso(value);
+  }
+
+  /// Coerces a backend value that may be a String, num, or null into a String.
+  ///
+  /// The backend returns some direction fields as numeric degrees (e.g. `72`)
+  /// and others as compass strings (e.g. `"NE"`). Casting directly with
+  /// `as String?` throws `type 'int' is not a subtype of type 'String?'`.
+  static String? _asString(dynamic value) {
+    if (value == null) return null;
+    if (value is String) return value;
+    if (value is num) return value.toString();
+    return value.toString();
+  }
+
 
   factory ZoneDto.fromJson(Map<String, dynamic> json) {
     final sourcesList = (json['sources'] as List<dynamic>?)
@@ -65,17 +88,18 @@ class ZoneDto {
       waveHeightM: (json['wave_height_m'] as num?)?.toDouble() ?? 1.5,
       swellPeriodS: (json['swell_period_s'] as num?)?.toDouble(),
       windSpeedKn: (json['wind_speed_kn'] as num?)?.toDouble() ?? 12.0,
-      windDirection: json['wind_direction'] as String?,
+      windDirection: _asString(json['wind_direction']),
       seaTempC: (json['sea_temp_c'] as num?)?.toDouble() ?? 28.0,
       currentSpeedKn: (json['current_speed_kn'] as num?)?.toDouble() ?? 1.0,
-      currentDirection: json['current_direction'] as String?,
+      currentDirection: _asString(json['current_direction']),
+
       chlorophyllMgM3: (json['chlorophyll_mg_m3'] as num?)?.toDouble(),
       fishingEffortHours: (json['fishing_effort_hours'] as num?)?.toDouble(),
       nearestHarbour: json['nearest_harbour'] as String?,
       nearestHarbourDistKm: (json['nearest_harbour_dist_km'] as num?)?.toDouble(),
       sources: sourcesList,
       sourcesFailed: failedList,
-      timestampStr: json['timestamp'] as String?,
+      timestamp: _parseTimestamp(json['timestamp']),
     );
   }
 
@@ -99,8 +123,49 @@ class ZoneDto {
       nearestHarbourDistKm: nearestHarbourDistKm,
       sources: sources,
       sourcesFailed: sourcesFailed,
-      timestamp: DateFormatter.parseIso(timestampStr) ?? DateTime.now(),
+      timestamp: timestamp ?? DateTime.now(),
       staleness: staleness,
+    );
+  }
+}
+
+/// DTO for /api/v1/layers.
+class LayerDto {
+  final String id;
+  final String name;
+  final String? unit;
+  final String? source;
+  final String? tileUrl;
+  final bool? enabled;
+
+  LayerDto({
+    required this.id,
+    required this.name,
+    this.unit,
+    this.source,
+    this.tileUrl,
+    this.enabled,
+  });
+
+  factory LayerDto.fromJson(Map<String, dynamic> json) {
+    return LayerDto(
+      id: json['id'] as String? ?? 'layer',
+      name: json['name'] as String? ?? 'Layer',
+      unit: json['unit'] as String?,
+      source: json['source'] as String?,
+      tileUrl: json['tile_url'] as String?,
+      enabled: json['enabled'] as bool?,
+    );
+  }
+
+  MapLayerEntity toEntity() {
+    return MapLayerEntity(
+      id: id,
+      name: name,
+      unit: unit ?? '',
+      source: source ?? 'Backend Map Tile',
+      tileUrl: tileUrl ?? '/api/v1/tiles/$id/{z}/{x}/{y}.png',
+      isEnabled: enabled ?? false,
     );
   }
 }

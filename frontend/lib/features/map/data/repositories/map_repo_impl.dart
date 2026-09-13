@@ -5,7 +5,6 @@ import '../../../../core/result/app_failure.dart';
 import '../../../../core/result/result.dart';
 
 import '../../domain/entities/zone_snapshot.dart';
-import '../../domain/entities/map_layer.dart';
 import '../../domain/repositories/map_repo.dart';
 import '../datasources/map_remote.dart';
 import '../dto/zone_dto.dart';

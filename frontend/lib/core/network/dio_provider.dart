@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io' show Platform;
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -6,11 +7,53 @@ import '../config/app_config.dart';
 import '../config/api_paths.dart';
 import '../cache/cache_service.dart';
 
+/// Returns the correct default ORCA Box URL for the current platform.
+///
+/// On the Android emulator, `127.0.0.1` refers to the emulator itself, not the
+/// host laptop. The emulator reaches the host through the special alias
+/// `10.0.2.2`, so Android defaults to that. Web/desktop keep `127.0.0.1`.
+String defaultOrcaBoxUrl() {
+  if (!kIsWeb && Platform.isAndroid) {
+    return AppConfig.androidEmulatorUrl;
+  }
+  return AppConfig.defaultBaseUrl;
+}
+
+
+/// Converts the value entered by a user into an HTTP(S) ORCA Box base URL.
+///
+/// On a physical phone, a bare LAN address such as `192.168.1.15` is the
+/// most common input. Dio requires an absolute URL, so supply the protocol
+/// and default ORCA Box port for that form before creating a client.
+String? normalizeOrcaBoxUrl(String value) {
+  var url = value.trim();
+  if (url.isEmpty) return null;
+
+  if (!url.contains('://')) {
+    url = 'http://$url';
+  }
+
+  final uri = Uri.tryParse(url);
+  if (uri == null ||
+      (uri.scheme != 'http' && uri.scheme != 'https') ||
+      uri.host.isEmpty ||
+      uri.userInfo.isNotEmpty ||
+      uri.query.isNotEmpty ||
+      uri.fragment.isNotEmpty) {
+    return null;
+  }
+
+  // A bare IP/host should point to the FastAPI server's standard port.
+  final port = uri.hasPort ? uri.port : AppConfig.defaultPort;
+  return uri.replace(port: port, path: '').toString().replaceFirst(RegExp(r'/$'), '');
+}
+
 /// State provider storing user-configured ORCA box base URL.
 final baseUrlProvider = StateProvider<String>((ref) {
-  return ref.watch(cacheServiceProvider).get('settings.base_url')?.data['value'] as String? ??
-      AppConfig.defaultBaseUrl;
+  final savedUrl = ref.watch(cacheServiceProvider).get('settings.base_url')?.data['value'] as String?;
+  return normalizeOrcaBoxUrl(savedUrl ?? '') ?? defaultOrcaBoxUrl();
 });
+
 
 /// Shared Dio client provider configured with 15s timeout & retry-once interceptor.
 final dioProvider = Provider<Dio>((ref) {

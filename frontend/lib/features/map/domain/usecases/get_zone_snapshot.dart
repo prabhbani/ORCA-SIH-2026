@@ -1,7 +1,6 @@
 import '../../../../core/result/result.dart';
 
 import '../entities/zone_snapshot.dart';
-import '../entities/map_layer.dart';
 import '../repositories/map_repo.dart';
 
 /// Usecase for probing a specific coordinate spot (§10).
