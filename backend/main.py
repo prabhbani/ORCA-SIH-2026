@@ -9,6 +9,7 @@ from fastapi.responses import StreamingResponse
 
 load_dotenv(Path(__file__).with_name(".env"))
 
+import routes_v1
 from routes_v1 import router as v1_router
 
 app = FastAPI(
@@ -48,9 +49,13 @@ async def live_stream():
         yield f"event: connected\ndata: {json.dumps({'message': 'Connected to ORCA Box SSE Stream', 'timestamp': int(time.time())})}\n\n"
         
         count = 0
+        last_telemetry_revision = routes_v1.TELEMETRY_REVISION
         while True:
             await asyncio.sleep(8)
             count += 1
+            if routes_v1.TELEMETRY_REVISION != last_telemetry_revision:
+                last_telemetry_revision = routes_v1.TELEMETRY_REVISION
+                yield f"event: data.updated\ndata: {json.dumps({'kind': 'vessels', 'revision': last_telemetry_revision, 'timestamp': int(time.time())})}\n\n"
             payload = {
                 "event_id": f"evt-{count}",
                 "timestamp": int(time.time()),

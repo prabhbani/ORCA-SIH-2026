@@ -6,6 +6,48 @@ from data_providers import DataProvidersEngine
 
 
 class RouteAndForecastTests(unittest.TestCase):
+    def test_telemetry_is_validated_and_available_to_vessel_map(self):
+        routes_v1.STORE_TELEMETRY.clear()
+        telemetry = routes_v1.OrcaTelemetry(
+            deviceId="ORCA-BOX-001",
+            vesselId="VESSEL-001",
+            timestamp="2026-09-13T12:00:00Z",
+            latitude=14.5,
+            longitude=82.0,
+            speedKnots=5.4,
+            heading=127,
+            battery=82,
+        )
+        accepted = routes_v1.ingest_orca_telemetry(telemetry)
+        vessels = routes_v1.get_vessels()
+
+        self.assertEqual(accepted["status"], "accepted")
+        self.assertGreater(accepted["revision"], 0)
+        self.assertEqual(vessels["count"], 1)
+        self.assertEqual(vessels["vessels"][0]["vesselId"], "VESSEL-001")
+
+    def test_marine_risk_is_explainable_and_uses_only_provider_values(self):
+        class Provider:
+            def fetch_zone_snapshot(self, lat, lon):
+                return {
+                    "timestamp": 1,
+                    "variables": {
+                        "wave_height_m": 2.8,
+                        "wind_speed_kn": 24,
+                        "wind_gust_kn": 31,
+                        "current_speed_kn": 2,
+                    },
+                    "sources_used": [{"name": "test", "status": "FRESH"}],
+                }
+
+        with patch.object(routes_v1, "providers", Provider()):
+            result = routes_v1.get_marine_risk(20.9, 70.37)
+
+        self.assertGreater(result["score"], 0)
+        self.assertIn(result["level"], {"SAFE", "LOW", "MODERATE", "HIGH", "EXTREME"})
+        self.assertTrue(result["advisory_only"])
+        self.assertEqual(len(result["reasons"]), 4)
+
     def test_land_crossing_does_not_fabricate_detour(self):
         provider = DataProvidersEngine()
         result = provider.verify_route(22.1, 71.0, 22.2, 71.1)

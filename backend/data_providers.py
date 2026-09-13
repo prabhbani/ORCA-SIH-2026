@@ -136,6 +136,33 @@ class DataProvidersEngine:
             result["sources_failed"].append({"source": "JTWC", "reason": str(exc)})
         return result
 
+    def search_locations(self, query: str) -> List[Dict[str, Any]]:
+        """Resolve a user-entered place through Nominatim without embedding a key in Flutter.
+
+        The result is deliberately empty on provider failure; callers must not turn a
+        failed geocode into an invented location.
+        """
+        cleaned = query.strip()
+        if len(cleaned) < 2:
+            return []
+        try:
+            response = self._get(
+                "https://nominatim.openstreetmap.org/search",
+                params={"q": cleaned, "format": "jsonv2", "limit": 5},
+            )
+            rows = response.json()
+            return [
+                {
+                    "name": row.get("display_name", "Unnamed location"),
+                    "latitude": float(row["lat"]),
+                    "longitude": float(row["lon"]),
+                    "source": "OpenStreetMap Nominatim",
+                }
+                for row in rows if row.get("lat") is not None and row.get("lon") is not None
+            ]
+        except (httpx.HTTPError, ValueError, KeyError, TypeError):
+            return []
+
     def is_land(self, lat: float, lon: float) -> bool:
         """GLOBE 1km land mask offline check."""
         # Simple geographic land bounding box for demonstration/offline check
@@ -174,8 +201,8 @@ class DataProvidersEngine:
         forecast_params = {
             "latitude": lat,
             "longitude": lon,
-            "current": "wind_speed_10m,wind_gusts_10m",
-            "hourly": "wind_speed_10m,wind_gusts_10m",
+            "current": "wind_speed_10m,wind_direction_10m,wind_gusts_10m,temperature_2m,apparent_temperature,precipitation,cloud_cover,surface_pressure,visibility",
+            "hourly": "wind_speed_10m,wind_direction_10m,wind_gusts_10m,temperature_2m,apparent_temperature,precipitation,cloud_cover,surface_pressure,visibility",
             "forecast_days": 3,
             "wind_speed_unit": "kn",
             "timezone": "UTC",
@@ -246,6 +273,12 @@ class DataProvidersEngine:
                 "wind_speed_kn": wind_speed_kn,
                 "wind_gust_kn": wind_gust_kn,
                 "wind_direction_deg": forecast.get("wind_direction_10m"),
+                "air_temp_celsius": forecast.get("temperature_2m"),
+                "apparent_temp_celsius": forecast.get("apparent_temperature"),
+                "precipitation_mm": forecast.get("precipitation"),
+                "cloud_cover_percent": forecast.get("cloud_cover"),
+                "pressure_hpa": forecast.get("surface_pressure"),
+                "visibility_m": forecast.get("visibility"),
                 "sst_celsius": sst_celsius,
                 "current_speed_kn": current_kn,
                 "current_direction_deg": marine.get("ocean_current_direction"),
@@ -261,7 +294,10 @@ class DataProvidersEngine:
             "hourly_forecast": {
                 "time": hourly.get("time", []),
                 "wave_height_m": marine_response.json().get("hourly", {}).get("wave_height", []),
+                "wave_period_s": marine_response.json().get("hourly", {}).get("wave_period", []),
+                "swell_height_m": marine_response.json().get("hourly", {}).get("swell_wave_height", []),
                 "wind_speed_kn": hourly.get("wind_speed_10m", []),
+                "wind_direction_deg": hourly.get("wind_direction_10m", []),
                 "wind_gust_kn": hourly.get("wind_gusts_10m", []),
             },
             "pfz": pfz.get("features", []),

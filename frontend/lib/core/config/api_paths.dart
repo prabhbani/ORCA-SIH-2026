@@ -13,12 +13,15 @@ class ApiPaths {
   static const String datasets = '/api/v1/datasets';
   static const String zones = '/api/v1/zones';
   static const String alerts = '/api/v1/alerts';
+  static const String vessels = '/api/v1/vessels';
   static const String alertsSimulate = '/api/v1/alerts/simulate';
   static const String agents = '/api/v1/agents';
   static const String chat = '/api/v1/chat';
   static const String feedback = '/api/v1/feedback';
   static const String liveStream = '/api/live/stream';
   static const String mapSynoptic = '/api/map/synoptic';
+  static const String mapSearch = '/api/v1/map/search';
+  static const String marineRisk = '/api/v1/marine-risk';
 
   /// Legacy fallback mapping if v1 endpoints return 404.
   static const Map<String, String> legacyFallbacks = {

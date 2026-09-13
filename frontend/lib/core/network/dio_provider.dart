@@ -1,4 +1,3 @@
-import 'dart:async';
 import 'dart:io' show Platform;
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
@@ -58,16 +57,17 @@ final baseUrlProvider = StateProvider<String>((ref) {
 /// Shared Dio client provider configured with 15s timeout & retry-once interceptor.
 final dioProvider = Provider<Dio>((ref) {
   final baseUrl = ref.watch(baseUrlProvider);
+  final headers = <String, dynamic>{
+    'Accept': 'application/json',
+    if (!kIsWeb) 'User-Agent': 'ORCA-Flutter-Client/1.0 (SIH26176)',
+  };
   final dio = Dio(
     BaseOptions(
       baseUrl: baseUrl,
       connectTimeout: AppConfig.connectTimeout,
       receiveTimeout: AppConfig.receiveTimeout,
       sendTimeout: AppConfig.sendTimeout,
-      headers: <String, dynamic>{
-        'Accept': 'application/json',
-        'User-Agent': 'ORCA-Flutter-Client/1.0 (SIH26176)',
-      },
+      headers: headers,
     ),
   );
 

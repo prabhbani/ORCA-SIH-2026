@@ -55,11 +55,29 @@ class FeedbackCreate(BaseModel):
 class SyncPayload(BaseModel):
     operations: List[Dict[str, Any]]
 
+class OrcaTelemetry(BaseModel):
+    deviceId: str = Field(min_length=1, max_length=120)
+    vesselId: str = Field(min_length=1, max_length=120)
+    timestamp: str
+    latitude: float = Field(ge=-90, le=90)
+    longitude: float = Field(ge=-180, le=180)
+    speedKnots: Optional[float] = Field(default=None, ge=0, le=100)
+    heading: Optional[float] = Field(default=None, ge=0, le=360)
+    battery: Optional[float] = Field(default=None, ge=0, le=100)
+    gpsAccuracy: Optional[float] = Field(default=None, ge=0)
+    sos: bool = False
+    online: bool = True
+    engineStatus: Optional[str] = None
+    waterTemperature: Optional[float] = None
+    pressure: Optional[float] = None
+
 # In-memory store for backend demo
 STORE_PROFILES = {}
 STORE_LOCATIONS = []
 STORE_HISTORY = []
 STORE_CATCH = []
+STORE_TELEMETRY: Dict[str, List[Dict[str, Any]]] = {}
+TELEMETRY_REVISION = 0
 
 # --- PHASE 1 CORE ENDPOINTS ---
 
@@ -87,6 +105,12 @@ def get_zone_snapshot(lat: float = Query(20.9), lon: float = Query(70.37), inclu
         "wind_speed_kn": variables.get("wind_speed_kn"),
         "wind_gust_kn": variables.get("wind_gust_kn"),
         "wind_direction": variables.get("wind_direction_deg"),
+        "air_temp_c": variables.get("air_temp_celsius"),
+        "apparent_temp_c": variables.get("apparent_temp_celsius"),
+        "precipitation_mm": variables.get("precipitation_mm"),
+        "cloud_cover_percent": variables.get("cloud_cover_percent"),
+        "pressure_hpa": variables.get("pressure_hpa"),
+        "visibility_m": variables.get("visibility_m"),
         "sea_temp_c": variables.get("sst_celsius"),
         "current_speed_kn": variables.get("current_speed_kn"),
         "current_direction": variables.get("current_direction_deg"),
@@ -102,6 +126,7 @@ def get_zone_snapshot(lat: float = Query(20.9), lon: float = Query(70.37), inclu
         "sources_failed": [failure.get("source", "unknown") for failure in snap.get("sources_failed", [])],
         "source_details": snap.get("sources_used", []),
         "pfz": snap.get("pfz", []),
+        "hourly_forecast": snap.get("hourly_forecast", {}),
     }
 
 @router.get("/grid")
@@ -120,9 +145,81 @@ def get_grid(lat: float = Query(20.9), lon: float = Query(70.37), span: float = 
                     "lon": plon,
                     "wave_h": snap["variables"]["wave_height_m"],
                     "wind_kn": snap["variables"]["wind_speed_kn"],
+                    "wind_direction_deg": snap["variables"].get("wind_direction_deg"),
                     "chl": snap["variables"].get("chlorophyll_mg_m3")
                 })
     return {"latitude": lat, "longitude": lon, "span": span, "points": points}
+
+@router.get("/map/search")
+def search_map(query: str = Query(min_length=2, max_length=160)):
+    """Keyless server-side place search; empty results mean the provider did not resolve it."""
+    return {"query": query, "results": providers.search_locations(query)}
+
+@router.post("/telemetry")
+def ingest_orca_telemetry(data: OrcaTelemetry):
+    """Validate and store the latest ORCA Box telemetry for a vessel."""
+    global TELEMETRY_REVISION
+    record = data.model_dump()
+    records = STORE_TELEMETRY.setdefault(data.vesselId, [])
+    records.insert(0, record)
+    del records[100:]
+    TELEMETRY_REVISION += 1
+    return {"status": "accepted", "vessel": record, "revision": TELEMETRY_REVISION}
+
+@router.get("/vessels")
+def get_vessels():
+    """Return latest validated ORCA Box telemetry for connected vessels."""
+    vessels = [records[0] for records in STORE_TELEMETRY.values() if records]
+    return {"vessels": vessels, "count": len(vessels), "source": "ORCA Box telemetry"}
+
+@router.get("/vessels/{vessel_id}")
+def get_vessel(vessel_id: str):
+    records = STORE_TELEMETRY.get(vessel_id, [])
+    if not records:
+        raise HTTPException(status_code=404, detail="Vessel telemetry unavailable")
+    return {"vessel": records[0], "source": "ORCA Box telemetry"}
+
+@router.get("/vessels/{vessel_id}/trail")
+def get_vessel_trail(vessel_id: str, hours: int = Query(1, ge=1, le=24)):
+    records = STORE_TELEMETRY.get(vessel_id, [])
+    return {"vessel_id": vessel_id, "hours": hours, "trail": records[: min(len(records), hours * 60)], "source": "ORCA Box telemetry"}
+
+@router.get("/marine-risk")
+def get_marine_risk(lat: float = Query(20.9), lon: float = Query(70.37)):
+    """Explainable decision-support score derived only from live provider values."""
+    snap = providers.fetch_zone_snapshot(lat, lon)
+    if snap.get("error"):
+        raise HTTPException(status_code=503, detail=snap.get("reason", "Live marine data unavailable"))
+    values = snap["variables"]
+    score = 0
+    reasons = []
+    wave = values.get("wave_height_m")
+    wind = values.get("wind_speed_kn")
+    gust = values.get("wind_gust_kn")
+    current = values.get("current_speed_kn")
+    if wave is not None:
+        points = min(40, round(float(wave) * 10))
+        score += points
+        reasons.append({"factor": "wave_height_m", "value": wave, "points": points})
+    if wind is not None:
+        points = min(30, round(max(0, float(wind) - 10) * 1.5))
+        score += points
+        reasons.append({"factor": "wind_speed_kn", "value": wind, "points": points})
+    if gust is not None:
+        points = min(20, round(max(0, float(gust) - 15)))
+        score += points
+        reasons.append({"factor": "wind_gust_kn", "value": gust, "points": points})
+    if current is not None:
+        points = min(10, round(max(0, float(current) - 1) * 5))
+        score += points
+        reasons.append({"factor": "current_speed_kn", "value": current, "points": points})
+    score = min(100, score)
+    level = "SAFE" if score <= 20 else "LOW" if score <= 40 else "MODERATE" if score <= 60 else "HIGH" if score <= 80 else "EXTREME"
+    return {
+        "latitude": lat, "longitude": lon, "score": score, "level": level,
+        "reasons": reasons, "advisory_only": True,
+        "observed_at": snap["timestamp"], "sources": snap["sources_used"],
+    }
 
 @router.get("/reason")
 def get_reasoning(lat: float = Query(20.9), lon: float = Query(70.37), include_gfw: bool = Query(False)):
