@@ -54,7 +54,12 @@ class AgentReasoningPanel extends ConsumerWidget {
           ],
         ),
         const SizedBox(height: 10),
-        _RegistryCard(runtimeState: runtimeState, onRun: onRun, onAskWhy: onAskWhy),
+        _RegistryCard(
+          runtimeState: runtimeState,
+          reasoningLoading: reasoningState.isLoading,
+          onRun: onRun,
+          onAskWhy: onAskWhy,
+        ),
         const SizedBox(height: 14),
         ...reasoningState.when(
           loading: () => <Widget>[
@@ -85,13 +90,13 @@ class AgentReasoningPanel extends ConsumerWidget {
           ],
           data: (AgentReasoningResult data) => <Widget>[
             if (llmFailed)
-              Padding(
-                padding: const EdgeInsets.only(bottom: 12),
+              const Padding(
+                padding: EdgeInsets.only(bottom: 12),
                 child: OrcaNotice(
                   icon: Icons.memory_rounded,
                   title: 'Deterministic fallback in use.',
                   message:
-                      'At least one language-model agent did not complete on this ORCA Box, so the deterministic engine produced the result. The verdict remains valid; the narrative explanation does not.',
+                      'At least one optional language-model agent did not complete on this ORCA Box. The deterministic safety pipeline still returned its configured-limit result; no LLM narrative is being claimed.',
                   color: VerdictColors.caution,
                   trailingLabel: 'LOCAL MODEL',
                 ),
@@ -121,11 +126,13 @@ class AgentReasoningPanel extends ConsumerWidget {
 
 class _RegistryCard extends ConsumerWidget {
   final AsyncValue<List<AgentRuntimeStatus>> runtimeState;
+  final bool reasoningLoading;
   final VoidCallback onRun;
   final VoidCallback onAskWhy;
 
   const _RegistryCard({
     required this.runtimeState,
+    required this.reasoningLoading,
     required this.onRun,
     required this.onAskWhy,
   });
@@ -135,9 +142,12 @@ class _RegistryCard extends ConsumerWidget {
     final List<AgentRuntimeStatus> agents = runtimeState.valueOrNull ?? const <AgentRuntimeStatus>[];
     final int running = agents.where((AgentRuntimeStatus agent) => agent.isRunning).length;
     final int problems = agents.where((AgentRuntimeStatus agent) => agent.hasProblem).length;
+    final int fallbacks = agents.where((AgentRuntimeStatus agent) => agent.isFallback).length;
     final String headline = agents.isEmpty
         ? 'UNKNOWN'
-        : '$running RUNNING${problems == 0 ? '' : ' · $problems DEGRADED'}';
+        : '$running RUNNING'
+            '${fallbacks == 0 ? '' : ' · $fallbacks FALLBACK'}'
+            '${problems == 0 ? '' : ' · $problems FAILED'}';
 
     return OrcaCard(
       child: Column(
@@ -178,10 +188,12 @@ class _RegistryCard extends ConsumerWidget {
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
                     decoration: BoxDecoration(
-                      color: agent.hasProblem ? OrcaTheme.warnBg : OrcaTheme.accentWash,
+                      color: agent.hasProblem || agent.isFallback
+                          ? OrcaTheme.warnBg : OrcaTheme.accentWash,
                       borderRadius: BorderRadius.circular(999),
                       border: Border.all(
-                        color: agent.hasProblem ? const Color(0xFFF2DFAE) : OrcaTheme.cardBorder,
+                        color: agent.hasProblem || agent.isFallback
+                            ? const Color(0xFFF2DFAE) : OrcaTheme.cardBorder,
                       ),
                     ),
                     child: Row(
@@ -191,7 +203,7 @@ class _RegistryCard extends ConsumerWidget {
                           width: 6,
                           height: 6,
                           decoration: BoxDecoration(
-                            color: agent.hasProblem
+                            color: agent.hasProblem || agent.isFallback
                                 ? OrcaTheme.warnFg
                                 : agent.isRunning
                                     ? OrcaTheme.liveFg
@@ -220,6 +232,18 @@ class _RegistryCard extends ConsumerWidget {
                             color: OrcaTheme.textMuted,
                           ),
                         ),
+                        if (agent.type == 'LLM/Analytical' && agent.providerLabel != null) ...<Widget>[
+                          const SizedBox(width: 4),
+                          Text(
+                            '· ${agent.providerLabel}',
+                            style: const TextStyle(
+                              fontFamily: 'Inter',
+                              fontSize: 8.5,
+                              fontWeight: FontWeight.w700,
+                              color: OrcaTheme.textFaint,
+                            ),
+                          ),
+                        ],
                       ],
                     ),
                   ),
@@ -227,7 +251,7 @@ class _RegistryCard extends ConsumerWidget {
             ),
             const SizedBox(height: 10),
             Text(
-              'The registry reports IDLE until a reasoning request runs, so IDLE means "not currently running" — it is not a health guarantee. Language-model agents are listed with their real type: ${agents.where((AgentRuntimeStatus agent) => agent.type.toUpperCase().contains('LLM')).length} of ${agents.length}.',
+              'IDLE means not currently running. Each language-model role shows whether Ollama was not run, produced usable output, or produced no valid output. FALLBACK means an evidence-bound deterministic explanation was returned instead; it is not a failed safety calculation. Language-model roles: ${agents.where((AgentRuntimeStatus agent) => agent.type.toUpperCase().contains('LLM')).length} of ${agents.length}.',
               style: OrcaType.caption,
             ),
           ],
@@ -236,10 +260,10 @@ class _RegistryCard extends ConsumerWidget {
             children: <Widget>[
               Expanded(
                 child: OrcaPillButton(
-                  label: 'Run reasoning pass',
-                  icon: Icons.play_arrow_rounded,
+                  label: reasoningLoading ? 'Reasoning in progress…' : 'Run reasoning pass',
+                  icon: reasoningLoading ? Icons.hourglass_top_rounded : Icons.play_arrow_rounded,
                   primary: true,
-                  onPressed: onRun,
+                  onPressed: reasoningLoading ? null : onRun,
                 ),
               ),
               const SizedBox(width: 8),
